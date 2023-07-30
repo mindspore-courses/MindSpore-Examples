@@ -2,6 +2,9 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
 from mindvision.dataset import Mnist
+from mindspore.train import Model
+from mindvision.engine.callback import LossMonitor
+import mindspore.common.dtype as mstype
 import argparse
 
 class Net(nn.Cell):
@@ -29,30 +32,22 @@ class Net(nn.Cell):
         output = ops.log_softmax(x,axis=1)
         return output
     
-def train(args, model, device, train_loader, optimizer, epoch):
-    model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-#       data, target = data.to(device), target.to(device)
-        optimizer.clear_gradients()
-        output = model(data)
-        loss = ops.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
+def train(args, model, train_loader, optimizer, epoch):
+    for batch_idx, (data, target) in enumerate(train_loader.create_tuple_iterator()):
+        total_step = train_loader.get_dataset_size()
+        model.set_train()
+        target = ms.Tensor(target,mstype.int32)
+        loss = model(data,target)
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
-            if args.dry_run:
-                break
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss:{:.6f}'.format())
+     
 
-
-def test(model,device,test_loader):
+def test(model,test_loader):
     model.eval()
     test_loss = 0
     correct = 0
     model.set_train(False)
     for data, target in test_loader:
-#       data, target = data.to(device), target.to(device)
         output = model(data)
         test_loss += ops.nll_loss(output,target,reduction="sum").asnumpy()
         pred = output.argmax(axis=1)
@@ -70,13 +65,14 @@ def main():
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=14, metavar='N',
+    parser.add_argument('--epochs', type=int, default=1, metavar='N',
                         help='number of epochs to train (default: 14)')
+    #默认值是14!!!记得改回去!!!!!!!!!!!!!!!!!
     parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
                         help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--no-GPU', action='store_true', default=False,
+    parser.add_argument('--no-gpu', action='store_true', default=False,
                         help='disables GPU training')
     parser.add_argument('--dry-run', action='store_true', default=False,
                         help='quickly check a single pass')
@@ -87,15 +83,31 @@ def main():
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
     args = parser.parse_args()
-    if parser.no_GPU:
+    if args.no_gpu:
         ms.set_context(device_target="CPU")
 
     ms.set_seed(args.seed)
-    train_kwargs = {'batch_size':args.batch_size}
-    test_kwargs = {'batch_size':args.test_batch_size}
+    #train_kwargs = {'batch_size':args.batch_size}
+    #test_kwargs = {'batch_size':args.test_batch_size}
 
     # Load data
     download_train = Mnist(path="../data/mnist", split="train", batch_size=32, repeat_num=1, shuffle=True, resize=32, download=True)
     download_eval = Mnist(path="../data/mnist", split="test", batch_size=32, resize=32, download=True)
-    dataset_train = download_train.run()
-    dataset_eval = download_eval.run()
+    dataset1 = download_train.run() #Train
+    dataset2 = download_eval.run() #Test
+
+    model = Net()
+
+   # optimizer = ops.ApplyAdadelta(model.trainable_params(),args.lr)
+    optimizer = nn.optim.Adadelta(params=Net().trainable_params(), learning_rate=args.lr)
+    criterion = ops.NLLLoss()
+    model = nn.WithLossCell(model,loss_fn=criterion)
+    model = nn.TrainOneStepCell(model,optimizer)
+
+    for epoch in range(1, args.epochs + 1):
+        train(args, model,dataset1, optimizer, epoch)
+        test(model, dataset2)
+
+
+if __name__ == '__main__':
+    main()
