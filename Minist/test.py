@@ -88,3 +88,6 @@ train_model = Model(network=model, loss_fn=criterion, optimizer=optimizer)
 #             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss:{:.6f}'.format())
 
 train_model.train(epoch=args.epochs, train_dataset=dataset1, callbacks=[LossMonitor(0.01,1875)])
+
+acc = train_model.eval(dataset2)
+print("Accuracy: ",acc)
