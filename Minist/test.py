@@ -10,8 +10,8 @@ import argparse
 class Net(nn.Cell):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1,32,3,1,pad_mode="pad")
-        self.conv2 = nn.Conv2d(32,64,3,1,pad_mode="pad")
+        self.conv1 = nn.Conv2d(1,32,kernel_size=3,stride=1,pad_mode="pad")
+        self.conv2 = nn.Conv2d(32,64,kernel_size=3,stride=1,pad_mode="pad")
         self.dropout1 = nn.Dropout(0.25)
         self.dropout2 = nn.Dropout(0.5)
         self.fc1 = nn.Dense(12544,128)
@@ -38,8 +38,9 @@ parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=14, metavar='N',
+parser.add_argument('--epochs', type=int, default=1, metavar='N',
                     help='number of epochs to train (default: 14)')
+#原来是14！！！！！！记得改！！！
 parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
                     help='learning rate (default: 1.0)')
 parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
@@ -71,9 +72,12 @@ dataset2 = download_eval.run() #Test
 model = Net()
 
 # optimizer = ops.ApplyAdadelta(model.trainable_params(),args.lr)
-optimizer = nn.optim.Adadelta(params=Net().trainable_params(), learning_rate=args.lr)
+
+#optimizer = nn.optim.Adadelta(params=Net().trainable_params(), learning_rate=args.lr)
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+optimizer = nn.Momentum(model.trainable_params(), learning_rate=0.01, momentum=0.9)
 criterion = nn.NLLLoss()
-train_model = Model(network=model, loss_fn=criterion, optimizer=optimizer)
+train_model = Model(network=model, loss_fn=criterion, optimizer=optimizer,metrics={'accuracy'})
 
 #train_loader = dataset1
 
