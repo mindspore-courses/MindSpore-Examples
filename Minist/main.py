@@ -2,64 +2,36 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
 from mindvision.dataset import Mnist
-from mindspore.train import Model
+from mindspore.train import Model,LearningRateScheduler
 from mindvision.engine.callback import LossMonitor
-import mindspore.common.dtype as mstype
 import argparse
 
 class Net(nn.Cell):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1,32,3,1,pad_mode="pad")
-        self.conv2 = nn.Conv2d(32,64,3,1,pad_mode="pad")
+        self.conv1 = nn.Conv2d(1,32,kernel_size=3,stride=1,pad_mode="pad")
+        self.conv2 = nn.Conv2d(32,64,kernel_size=3,stride=1,pad_mode="pad")
         self.dropout1 = nn.Dropout(0.25)
         self.dropout2 = nn.Dropout(0.5)
-        self.fc1 = nn.Dense(9216,128)
+        self.fc1 = nn.Dense(12544,128)
         self.fc2 = nn.Dense(128,10)
 
-    def forward(self,x):
+    def construct(self,x):
         x = self.conv1(x)
         x = ops.relu(x)
         x = self.conv2(x)
         x = ops.relu(x)
         x = ops.max_pool2d(x,2)
         x = self.dropout1(x)
-        x = ops.flatten(x,1)
+        x = ops.flatten(x,start_dim = 1)
         x = self.fc1(x)
         x = ops.relu(x)
         x = self.dropout2(x)
         x = self.fc2(x)
         output = ops.log_softmax(x,axis=1)
         return output
-    
-def train(args, model, train_loader, optimizer, epoch):
-    for batch_idx, (data, target) in enumerate(train_loader.create_tuple_iterator()):
-        total_step = train_loader.get_dataset_size()
-        model.set_train()
-        target = ms.Tensor(target,mstype.int32)
-        loss = model(data,target)
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss:{:.6f}'.format())
-     
 
-def test(model,test_loader):
-    model.eval()
-    test_loss = 0
-    correct = 0
-    model.set_train(False)
-    for data, target in test_loader:
-        output = model(data)
-        test_loss += ops.nll_loss(output,target,reduction="sum").asnumpy()
-        pred = output.argmax(axis=1)
-        correct += pred.eq(target).sum()
-    test_loss /= len(test_loader.dataset)
-
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
-    
-
-def main():
+def get_parser():
     parser = argparse.ArgumentParser(description='Mindspore MNIST Example')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
@@ -83,31 +55,45 @@ def main():
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
     args = parser.parse_args()
+    return args
+    
+def learning_rate_function(lr, cur_step_num):
+    if cur_step_num%1875 == 0:
+        lr = lr * args.gamma
+    return lr 
+
+def train(args, model, train_loader):
+    model.train(epoch=args.epochs, train_dataset=train_loader, callbacks=[LearningRateScheduler(learning_rate_function),LossMonitor(0.01,1875)])
+     
+
+def test(model,test_loader):
+    acc = model.eval(test_loader)
+    print("Accuracy: ",acc)
+    
+
+def main(args):
     if args.no_gpu:
         ms.set_context(device_target="CPU")
-
     ms.set_seed(args.seed)
-    #train_kwargs = {'batch_size':args.batch_size}
-    #test_kwargs = {'batch_size':args.test_batch_size}
 
     # Load data
     download_train = Mnist(path="../data/mnist", split="train", batch_size=32, repeat_num=1, shuffle=True, resize=32, download=True)
     download_eval = Mnist(path="../data/mnist", split="test", batch_size=32, resize=32, download=True)
     dataset1 = download_train.run() #Train
     dataset2 = download_eval.run() #Test
-
     model = Net()
 
-   # optimizer = ops.ApplyAdadelta(model.trainable_params(),args.lr)
-    optimizer = nn.optim.Adadelta(params=Net().trainable_params(), learning_rate=args.lr)
-    criterion = ops.NLLLoss()
-    model = nn.WithLossCell(model,loss_fn=criterion)
-    model = nn.TrainOneStepCell(model,optimizer)
+    optimizer =  nn.optim.Adadelta(model.trainable_params(), learning_rate=args.lr, rho=0.9, weight_decay=0.0)
+    criterion = nn.NLLLoss()
+    train_model = Model(network=model, loss_fn=criterion, optimizer=optimizer,metrics={'accuracy'})
 
-    for epoch in range(1, args.epochs + 1):
-        train(args, model,dataset1, optimizer, epoch)
-        test(model, dataset2)
+    train(args, train_model,dataset1, optimizer)
+    test(train_model, dataset2)
+
+    if args.save_model:
+        ms.save_checkpoint(train_model, "Minist.ckpt")
 
 
 if __name__ == '__main__':
-    main()
+    args = get_parser()
+    main(args)
