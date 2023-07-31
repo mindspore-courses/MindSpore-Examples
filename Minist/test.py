@@ -2,7 +2,7 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
 from mindvision.dataset import Mnist
-from mindspore.train import Model
+from mindspore.train import Model,LearningRateScheduler
 from mindvision.engine.callback import LossMonitor
 import mindspore.common.dtype as mstype
 import argparse
@@ -31,14 +31,14 @@ class Net(nn.Cell):
         x = self.fc2(x)
         output = ops.log_softmax(x,axis=1)
         return output
-    
+
 
 parser = argparse.ArgumentParser(description='Mindspore MNIST Example')
 parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=1, metavar='N',
+parser.add_argument('--epochs', type=int, default=2, metavar='N',
                     help='number of epochs to train (default: 14)')
 #原来是14！！！！！！记得改！！！
 parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
@@ -59,9 +59,12 @@ args = parser.parse_args()
 if args.no_gpu:
     ms.set_context(device_target="CPU")
 
+def learning_rate_function(lr, cur_step_num):
+    if cur_step_num%1875 == 0:
+        lr = lr * args.gamma
+    return lr 
+
 ms.set_seed(args.seed)
-#train_kwargs = {'batch_size':args.batch_size}
-#test_kwargs = {'batch_size':args.test_batch_size}
 
 # Load data
 download_train = Mnist(path="../data/mnist", split="train", batch_size=32, repeat_num=1, shuffle=True, resize=32, download=True)
@@ -70,28 +73,15 @@ dataset1 = download_train.run() #Train
 dataset2 = download_eval.run() #Test
 
 model = Net()
+lr = args.lr
 
-# optimizer = ops.ApplyAdadelta(model.trainable_params(),args.lr)
+optimizer =  nn.optim.Adadelta(model.trainable_params(), learning_rate=args.lr, rho=0.9, weight_decay=0.0)
 
-#optimizer = nn.optim.Adadelta(params=Net().trainable_params(), learning_rate=args.lr)
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-optimizer = nn.Momentum(model.trainable_params(), learning_rate=0.01, momentum=0.9)
+
 criterion = nn.NLLLoss()
 train_model = Model(network=model, loss_fn=criterion, optimizer=optimizer,metrics={'accuracy'})
 
-#train_loader = dataset1
-
-# for epoch in range(1,args.epochs+1):
-#     print("Epoch: ",epoch)
-#     for batch_idx, (data, target) in enumerate(train_loader.create_tuple_iterator()):
-#         total_step = train_loader.get_dataset_size()
-#         train_model.set_train()
-#         target = ms.Tensor(target,mstype.int32)
-#         loss = train_model(data, target)
-#         if batch_idx % 1 == 0:
-#             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss:{:.6f}'.format())
-
-train_model.train(epoch=args.epochs, train_dataset=dataset1, callbacks=[LossMonitor(0.01,1875)])
+train_model.train(epoch=args.epochs, train_dataset=dataset1, callbacks=[LearningRateScheduler(learning_rate_function),LossMonitor(0.01,1875)])
 
 acc = train_model.eval(dataset2)
 print("Accuracy: ",acc)
