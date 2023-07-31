@@ -52,7 +52,7 @@ def get_parser():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--save-model', action='store_true', default=False,
+    parser.add_argument('--save-model', action='store_true', default=True,
                         help='For Saving the current Model')
     args = parser.parse_args()
     return args
@@ -87,11 +87,11 @@ def main(args):
     criterion = nn.NLLLoss()
     train_model = Model(network=model, loss_fn=criterion, optimizer=optimizer,metrics={'accuracy'})
 
-    train(args, train_model,dataset1, optimizer)
+    train(args, train_model,dataset1)
     test(train_model, dataset2)
 
     if args.save_model:
-        ms.save_checkpoint(train_model, "Minist.ckpt")
+        ms.save_checkpoint(model, "Minist.ckpt")
 
 
 if __name__ == '__main__':
