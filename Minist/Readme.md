@@ -1,5 +1,5 @@
 # MNIST examples
-(English | [Chinese](README_CN.md))
+(English | [Chinese](Readme_CN.md))
 
 pip install -r requirements.txt
 python main.py
