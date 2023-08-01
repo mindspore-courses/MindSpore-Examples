@@ -2,6 +2,7 @@
 (中文 | [English](Readme.md))
 
 pip install -r requirements.txt
+
 python main.py
 
 当epoch=2时，此模型准确度为98.16%
