@@ -86,8 +86,8 @@ def main(args):
     download_train = Mnist(path="../data/mnist", split="train", batch_size=args.batch_size, 
                            repeat_num=1, shuffle=True, resize=32, download=True)
     download_eval = Mnist(path="../data/mnist", split="test", batch_size=32, resize=32, download=True)
-    dataset1 = download_train.run() #Train data down
-    dataset2 = download_eval.run() #Test data down
+    dataset1 = download_train.run() #Train data download
+    dataset2 = download_eval.run() #Test data download
     model = Net()
 
     optimizer =  nn.optim.Adadelta(model.trainable_params(), learning_rate=args.lr, 
